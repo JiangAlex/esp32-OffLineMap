@@ -23,9 +23,10 @@
 #ifndef __APP_H
 #define __APP_H
 
-
+class PageManager;  // Forward declaration
 
 void App_Init(void);
 void App_Uninit(void);
+PageManager* App_GetPageManager(void);  // Get global page manager instance
 
 #endif

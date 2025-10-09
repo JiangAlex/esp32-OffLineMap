@@ -11,6 +11,7 @@
  *********************/
 #include "lv_port_indev.h"
 // #include "../../lvgl.h"
+#include "App/Common/HAL/HAL.h"  // For HAL::Encoder_GetIsExit()
 
 /*********************
  *      DEFINES
@@ -324,6 +325,9 @@ static void keypad_read(lv_indev_drv_t * indev_drv, lv_indev_data_t * data)
             case 5:
                 act_key = LV_KEY_ENTER;
                 break;
+            case 6:
+                act_key = LV_KEY_ESC;  // Exit button maps to ESC key
+                break;
         }
 
         last_key = act_key;
@@ -338,7 +342,10 @@ static void keypad_read(lv_indev_drv_t * indev_drv, lv_indev_data_t * data)
 /*Get the currently being pressed key.  0 if no key is pressed*/
 static uint32_t keypad_get_key(void)
 {
-    /*Your code comes here*/
+    /*Check exit button (GPIO 7)*/
+    if(HAL::Encoder_GetIsExit()) {
+        return 6;  // Exit key code
+    }
 
     return 0;
 }

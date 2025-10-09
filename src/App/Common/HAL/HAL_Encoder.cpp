@@ -5,8 +5,13 @@
 #include "ButtonEvent.h"
 #include "lvgl.h"
 #include "Arduino.h"
+#include "App/App.h"  // For App_GetPageManager()
+#include "App/Utils/PageManager/PageManager.h"  // For PageManager class definition
 
 static ButtonEvent EncoderPush(1000, 200, 200);  // 1s long press, 200ms repeat, 200ms double click
+static ButtonEvent EncoderExit(500, 100, 200);   // 500ms long press, 100ms repeat, 200ms double click for exit key
+
+static bool systemInitialized = false;  // Flag to check if system is fully initialized
 
 static bool EncoderEnable = true;
 static volatile int32_t EncoderDiff = 0;
@@ -90,11 +95,55 @@ static void lv_port_encoder() {
     printf("LVGL encoder registered with group\r\n");
 }
 
+// Simple keypad read function for exit key
+static void exit_keypad_read(lv_indev_drv_t * indev_drv, lv_indev_data_t * data)
+{
+    static uint32_t last_key = 0;
+    static bool was_pressed = false;
+    
+    bool is_exit_pressed = HAL::Encoder_GetIsExit();
+    
+    if(is_exit_pressed && !was_pressed) {
+        data->state = LV_INDEV_STATE_PR;
+        data->key = LV_KEY_ESC;
+        last_key = LV_KEY_ESC;
+        was_pressed = true;
+    } else if(!is_exit_pressed && was_pressed) {
+        data->state = LV_INDEV_STATE_REL;
+        data->key = last_key;
+        was_pressed = false;
+    } else {
+        data->state = was_pressed ? LV_INDEV_STATE_PR : LV_INDEV_STATE_REL;
+        data->key = last_key;
+    }
+}
+
+static void lv_port_exit_keypad() {
+    /*Register a keypad input device for exit key*/
+    static lv_indev_drv_t keypad_drv;
+    lv_indev_drv_init(&keypad_drv);
+    keypad_drv.type = LV_INDEV_TYPE_KEYPAD;
+    keypad_drv.read_cb = exit_keypad_read;
+    
+    lv_indev_t * keypad_indev = lv_indev_drv_register(&keypad_drv);
+    
+    // Use the same group as encoder for consistent navigation
+    lv_group_t * group = lv_group_get_default();
+    if(group) {
+        lv_indev_set_group(keypad_indev, group);
+        printf("LVGL exit keypad registered with group\r\n");
+    }
+}
+
 void HAL::Encoder_InitLVGL()
 {
     printf("Encoder_InitLVGL: Starting LVGL encoder initialization\r\n");
     lv_port_encoder();
-    printf("Encoder_InitLVGL: LVGL encoder initialization completed\r\n");
+    lv_port_exit_keypad();  // Also register exit keypad for LVGL ESC key support
+    
+    // Mark system as fully initialized
+    systemInitialized = true;
+    printf("Encoder_InitLVGL: LVGL encoder and exit keypad initialization completed - System ready\r\n");
 }
 //-----------------------
 void IRAM_ATTR handleEncoderChange() {
@@ -297,12 +346,84 @@ static void Encoder_PushHandler(ButtonEvent* btn, int event)
     printf("=====================================\r\n");
 }
 
+static void Encoder_ExitHandler(ButtonEvent* btn, int event)
+{
+    printf("=== Encoder_ExitHandler TRIGGERED ===\r\n");
+    printf("Exit Key Event Code: %d\r\n", event);
+    
+    if(event == ButtonEvent::EVENT_PRESSED)          // 1
+    {
+        printf("✓ Exit Button PRESSED\r\n");
+    }
+    else if(event == ButtonEvent::EVENT_RELEASED)    // 6
+    {
+        printf("✓ Exit Button RELEASED\r\n");
+    }
+    else if(event == ButtonEvent::EVENT_CLICKED)     // 8
+    {
+        printf("✓ Exit Button CLICKED - Triggering page exit\r\n");
+        
+        // Check if system is fully initialized
+        if(!systemInitialized) {
+            printf("WARNING: System not fully initialized yet, ignoring exit button\r\n");
+            HAL::Buzz_Tone(200, 100);  // Very low beep for "not ready"
+            return;
+        }
+        
+        // Add safety checks before calling PageManager
+        PageManager* manager = App_GetPageManager();
+        if(manager != nullptr) {
+            printf("PageManager found, attempting Pop operation...\r\n");
+            
+            // Add detailed diagnostic information
+            printf("Checking page stack status...\r\n");
+            
+            // Add a small delay to ensure system stability
+            delay(10);
+            
+            bool result = manager->Pop();
+            printf("Page Pop result: %s\r\n", result ? "SUCCESS" : "FAILED");
+            
+            if(!result) {
+                printf("Pop failed - possible reasons:\r\n");
+                printf("1. Page animation in progress\r\n");
+                printf("2. Already at root page (empty stack)\r\n");
+                printf("3. Page state doesn't allow switching\r\n");
+            }
+            
+            // Add feedback buzz only after successful operation
+            if(result) {
+                HAL::Buzz_Tone(800, 100);  // Short high-pitched beep for exit
+            } else {
+                HAL::Buzz_Tone(400, 200);  // Lower pitched beep for failure
+            }
+        } else {
+            printf("ERROR: Page manager is null - system may not be fully initialized!\r\n");
+            HAL::Buzz_Tone(300, 300);  // Low pitched beep for error
+        }
+    }
+    else if(event == ButtonEvent::EVENT_SHORT_CLICKED) // 9
+    {
+        printf("✓ Exit Button SHORT_CLICKED\r\n");
+    }
+    else if(event == ButtonEvent::EVENT_LONG_PRESSED) // 3
+    {
+        printf("✓ Exit Button LONG_PRESSED\r\n");
+    }
+    else
+    {
+        printf("? Unknown exit event: %d\r\n", event);
+    }
+    printf("=====================================\r\n");
+}
+
 void HAL::Encoder_Init()
 {
     printf("Encoder_Init \r\n");
     pinMode(CONFIG_ENCODER_A_PIN, INPUT_PULLUP);
     pinMode(CONFIG_ENCODER_B_PIN, INPUT_PULLUP);
     pinMode(CONFIG_ENCODER_PUSH_PIN, INPUT_PULLUP);
+    pinMode(CONFIG_ENCODER_EXIT_PIN, INPUT_PULLUP);  // Initialize exit button pin
 
     attachInterrupt(CONFIG_ENCODER_A_PIN, Encoder_EventHandler, FALLING);
     printf("attachInterrupt Encoder_EventHandler end \r\n");
@@ -313,19 +434,20 @@ void HAL::Encoder_Init()
     PreviousDT = digitalRead(CONFIG_ENCODER_B_PIN);
 
     EncoderPush.EventAttach(Encoder_PushHandler);
-    printf("EncoderPush.EventAttach end \r\n");
+    EncoderExit.EventAttach(Encoder_ExitHandler);  // Attach exit button handler
+    printf("EncoderPush.EventAttach and EncoderExit.EventAttach end \r\n");
 
-    // Create encoder debugging task with larger stack
-    xTaskCreatePinnedToCore(
-        readEncoderTask,    // Function to implement the task
-        "readEncoderTask",  // Name of the task
-        4096,               // Stack size in bytes (reduced from 10000)
-        NULL,               // Task input parameter
-        1,                  // Priority of the task
-        NULL,               // Task handle
-        0                   // Core where the task should run
-    );
-    printf("Encoder debug task created \r\n");
+    // Create encoder debugging task with larger stack - DISABLED for stability
+    // xTaskCreatePinnedToCore(
+    //     readEncoderTask,    // Function to implement the task
+    //     "readEncoderTask",  // Name of the task
+    //     4096,               // Stack size in bytes (reduced from 10000)
+    //     NULL,               // Task input parameter
+    //     1,                  // Priority of the task
+    //     NULL,               // Task handle
+    //     0                   // Core where the task should run
+    // );
+    // printf("Encoder debug task created \r\n");
     
     // Don't call lv_port_encoder() here - will be called after LVGL is fully ready
     printf("Encoder_Init completed - LVGL encoder will be initialized later\r\n");
@@ -343,15 +465,18 @@ void HAL::Encoder_Update()
     // Debug print every 500 calls to show update is working
     if(debugCounter >= 500) {
         bool buttonState = Encoder_GetIsPush();
-        printf("Encoder_Update: ButtonState=%d, DebugCount=%d, UpdateCount=%d\r\n", 
-               buttonState, debugCounter, updateCounter);
+        bool exitState = Encoder_GetIsExit();
+        printf("Encoder_Update: ButtonState=%d, ExitState=%d, DebugCount=%d, UpdateCount=%d\r\n", 
+               buttonState, exitState, debugCounter, updateCounter);
         debugCounter = 0;
     }
     
-    if(updateCounter >= 10) {  // Check button every 10 calls
+    if(updateCounter >= 10) {  // Check buttons every 10 calls
         updateCounter = 0;
         bool buttonState = Encoder_GetIsPush();
+        bool exitState = Encoder_GetIsExit();
         EncoderPush.EventMonitor(buttonState);
+        EncoderExit.EventMonitor(exitState);  // Monitor exit button
     }
 }
 
@@ -373,6 +498,17 @@ bool HAL::Encoder_GetIsPush()
     return (digitalRead(CONFIG_ENCODER_PUSH_PIN) == LOW);
 }
 
+bool HAL::Encoder_GetIsExit()
+{
+    if(!EncoderEnable)
+    {
+        return false;
+    }
+    
+    // Simple single reading - let ButtonEvent handle debouncing
+    return (digitalRead(CONFIG_ENCODER_EXIT_PIN) == LOW);
+}
+
 void HAL::Encoder_SetEnable(bool en)
 {
     EncoderEnable = en;
@@ -384,6 +520,7 @@ void HAL::Encoder_PrintPinStates()
     int pinA = digitalRead(CONFIG_ENCODER_A_PIN);
     int pinB = digitalRead(CONFIG_ENCODER_B_PIN);
     int pinPush = digitalRead(CONFIG_ENCODER_PUSH_PIN);
+    int pinExit = digitalRead(CONFIG_ENCODER_EXIT_PIN);
     
     Serial.print("Encoder Pins - A: ");
     Serial.print(pinA);
@@ -391,8 +528,27 @@ void HAL::Encoder_PrintPinStates()
     Serial.print(pinB);
     Serial.print(", Push: ");
     Serial.print(pinPush);
+    Serial.print(", Exit: ");
+    Serial.print(pinExit);
     Serial.print(", Diff: ");
     Serial.print(EncoderDiff);
     Serial.print(", Value: ");
     Serial.println(encoderValue);
+}
+
+// Test exit button functionality
+void HAL::Encoder_TestExitFunction()
+{
+    printf("=== Testing Exit Button Functionality ===\r\n");
+    printf("System Initialized: %s\r\n", systemInitialized ? "YES" : "NO");
+    
+    PageManager* manager = App_GetPageManager();
+    printf("PageManager available: %s\r\n", (manager != nullptr) ? "YES" : "NO");
+    
+    bool exitPressed = Encoder_GetIsExit();
+    printf("Exit button currently pressed: %s\r\n", exitPressed ? "YES" : "NO");
+    
+    printf("Pin states:\r\n");
+    Encoder_PrintPinStates();
+    printf("=======================================\r\n");
 }

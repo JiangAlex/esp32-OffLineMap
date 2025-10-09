@@ -115,8 +115,10 @@ namespace HAL
     void Encoder_Update();
     int32_t Encoder_GetDiff();
     bool Encoder_GetIsPush();
+    bool Encoder_GetIsExit();       // Get exit/back button state (GPIO 7)
     void Encoder_SetEnable(bool en);
     void Encoder_PrintPinStates();  // Debug function to print encoder pin states
+    void Encoder_TestExitFunction(); // Test exit button functionality
 
     /* Audio */
     void Audio_Init();

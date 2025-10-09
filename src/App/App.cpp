@@ -40,10 +40,19 @@ using namespace Page;
 
 extern lv_indev_t *indev_touchpad;
 
+static PageManager* g_pageManager = nullptr;  // Global page manager instance
+
+PageManager* App_GetPageManager(void)
+{
+    return g_pageManager;
+}
+
 void App_Init()
 {
     static AppFactory factory;
     static PageManager manager(&factory);
+    
+    g_pageManager = &manager;  // Store global reference
 
     /* Make sure the default group exists */
     if (!lv_group_get_default())
