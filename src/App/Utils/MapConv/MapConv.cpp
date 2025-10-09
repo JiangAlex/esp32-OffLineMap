@@ -24,6 +24,7 @@
 #include <stdio.h>
 #include <Arduino.h>
 #include "GPS_Transform/GPS_Transform.h"
+#include "App/Config/Config.h"
 
 using namespace::Microsoft_MapPoint;
 
@@ -43,7 +44,7 @@ bool MapConv::coordTransformEnable = false;
 
 MapConv::MapConv()
 {
-    priv.level = 16;
+    priv.level = CONFIG_LIVE_MAP_LEVEL_DEFAULT;  // Use config default instead of hardcoded 16
     priv.tileSize = 256;
     
     // Debug: Print the map format being used

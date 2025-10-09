@@ -126,6 +126,7 @@ void LiveMapView::SetMapTile(uint32_t tileSize, uint32_t widthCnt)
 
         lv_coord_t x = (i % widthCnt) * tileSize;
         lv_coord_t y = (i / widthCnt) * tileSize;
+        
         lv_obj_set_pos(img, x, y);
     }
 }
@@ -243,15 +244,10 @@ void LiveMapView::SetMapTileSrc(uint32_t index, const char* src)
                 // Force refresh the image object
                 lv_obj_invalidate(ui.map.imgTiles[index]);
                 
-                // Blue border to indicate success
-                lv_obj_set_style_border_color(ui.map.imgTiles[index], lv_color_hex(0x0000FF), 0);
-                lv_obj_set_style_border_width(ui.map.imgTiles[index], 3, 0);
-                lv_obj_set_style_border_opa(ui.map.imgTiles[index], LV_OPA_COVER, 0);
-                
                 // Force LVGL to process the image immediately
                 lv_task_handler();
                 
-                printf("[SetMapTileSrc] BIN tile %u forced refresh with blue border\n", index);
+                printf("[SetMapTileSrc] BIN tile %u forced refresh\n", index);
             } else {
                 printf("[SetMapTileSrc] ⚠ BIN decode failed for tile %u, invalid descriptor\n", index);
             }
@@ -279,11 +275,6 @@ void LiveMapView::SetMapTileSrc(uint32_t index, const char* src)
                 
                 // Force refresh the image object
                 lv_obj_invalidate(ui.map.imgTiles[index]);
-                
-                // Blue border to indicate success
-                lv_obj_set_style_border_color(ui.map.imgTiles[index], lv_color_hex(0x0000FF), 0);
-                lv_obj_set_style_border_width(ui.map.imgTiles[index], 3, 0);
-                lv_obj_set_style_border_opa(ui.map.imgTiles[index], LV_OPA_COVER, 0);
                 
                 // Force LVGL to process the image immediately
                 lv_task_handler();
@@ -397,7 +388,7 @@ void LiveMapView::ZoomCtrl_Create(lv_obj_t* par)
     lv_obj_t* slider = lv_slider_create(cont);
     lv_obj_remove_style_all(slider);
     // lv_obj_set_style_opa(slider, LV_OPA_COVER, 0); // #new
-    lv_slider_set_value(slider, 15, LV_ANIM_OFF);
+    lv_slider_set_value(slider, CONFIG_LIVE_MAP_LEVEL_DEFAULT, LV_ANIM_OFF);  // Use config default
     ui.zoom.slider = slider;
 }
 
@@ -476,11 +467,6 @@ void LiveMapView::CreateFallbackTile(uint32_t index, const char* src)
     // Set background color
     lv_obj_set_style_bg_color(ui.map.imgTiles[index], lv_color_hex(color), 0);
     lv_obj_set_style_bg_opa(ui.map.imgTiles[index], LV_OPA_COVER, 0);
-    
-    // Add border
-    lv_obj_set_style_border_color(ui.map.imgTiles[index], lv_color_hex(0xFFFFFF), 0);
-    lv_obj_set_style_border_width(ui.map.imgTiles[index], 2, 0);
-    lv_obj_set_style_border_opa(ui.map.imgTiles[index], LV_OPA_COVER, 0);
     
     // Make sure it's visible
     lv_obj_clear_flag(ui.map.imgTiles[index], LV_OBJ_FLAG_HIDDEN);

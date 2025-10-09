@@ -56,6 +56,9 @@ void LiveMap::onViewLoad()
 
     lv_slider_set_value(View.ui.zoom.slider, mapLevelCurrent, LV_ANIM_OFF);
     Model.mapConv.SetLevel(mapLevelCurrent);
+    printf("[LiveMap::onViewLoad] Initial settings: mapLevelCurrent=%d, CONFIG_DEFAULT=%d\n", 
+           mapLevelCurrent, CONFIG_LIVE_MAP_LEVEL_DEFAULT);
+    printf("[LiveMap::onViewLoad] MapConv level after SetLevel: %d\n", Model.mapConv.GetLevel());
     lv_obj_add_flag(View.ui.map.cont, LV_OBJ_FLAG_HIDDEN);
 
     /* Point filter */
@@ -115,11 +118,6 @@ void LiveMap::onViewDidAppear()
     lv_coord_t map_h = lv_obj_get_height(View.ui.map.cont);
     printf("[LiveMap] Map container: pos(%d,%d) size(%d,%d)\n", map_x, map_y, map_w, map_h);
     
-    // Make map container more visible with debug styling
-    lv_obj_set_style_border_color(View.ui.map.cont, lv_color_hex(0x00FF00), 0);
-    lv_obj_set_style_border_width(View.ui.map.cont, 3, 0);
-    lv_obj_set_style_border_opa(View.ui.map.cont, LV_OPA_COVER, 0);
-
     priv.lastTileContOriPoint.x = 0;
     priv.lastTileContOriPoint.y = 0;
 
@@ -211,7 +209,7 @@ void LiveMap::CheckPosition()
     {
         refreshMap = true;
         Model.mapConv.SetLevel(mapLevelCurrent);
-        printf("[Update] SetLevel\n");
+        printf("[Update] SetLevel: %d -> %d\n", Model.mapConv.GetLevel(), mapLevelCurrent);
     }
 
     int32_t mapX, mapY;
@@ -360,7 +358,8 @@ void LiveMap::MapTileContReload()
         
         // Check if current level directory exists
         char levelPath[32];
-        snprintf(levelPath, sizeof(levelPath), "/MAP/%d", Model.mapConv.GetLevel());
+        int currentLevel = Model.mapConv.GetLevel();
+        snprintf(levelPath, sizeof(levelPath), "/MAP/%d", currentLevel);
         if (lv_fs_dir_open(&dir, levelPath) == LV_FS_RES_OK)
         {
             printf("[MapTileContReload] %s directory exists\n", levelPath);
@@ -369,8 +368,58 @@ void LiveMap::MapTileContReload()
         else
         {
             printf("[MapTileContReload] ERROR: %s directory not found!\n", levelPath);
-            printf("[MapTileContReload] Current map level: %d\n", Model.mapConv.GetLevel());
-            return;
+            printf("[MapTileContReload] Current map level: %d\n", currentLevel);
+            
+            // Try to fallback to default level if current level doesn't exist
+            if (currentLevel != CONFIG_LIVE_MAP_LEVEL_DEFAULT)
+            {
+                printf("[MapTileContReload] Attempting fallback to default level %d\n", CONFIG_LIVE_MAP_LEVEL_DEFAULT);
+                Model.mapConv.SetLevel(CONFIG_LIVE_MAP_LEVEL_DEFAULT);
+                mapLevelCurrent = CONFIG_LIVE_MAP_LEVEL_DEFAULT;
+                
+                // Update slider to reflect the corrected level
+                lv_slider_set_value(View.ui.zoom.slider, CONFIG_LIVE_MAP_LEVEL_DEFAULT, LV_ANIM_OFF);
+                
+                // Try again with default level
+                snprintf(levelPath, sizeof(levelPath), "/MAP/%d", CONFIG_LIVE_MAP_LEVEL_DEFAULT);
+                if (lv_fs_dir_open(&dir, levelPath) == LV_FS_RES_OK)
+                {
+                    printf("[MapTileContReload] Fallback successful: %s directory exists\n", levelPath);
+                    lv_fs_dir_close(&dir);
+                }
+                else
+                {
+                    printf("[MapTileContReload] CRITICAL: Even default level %d directory not found!\n", CONFIG_LIVE_MAP_LEVEL_DEFAULT);
+                    
+                    // Last resort: try to find any available map level
+                    printf("[MapTileContReload] Searching for any available map level...\n");
+                    bool foundLevel = false;
+                    for (int tryLevel = 6; tryLevel <= 18 && !foundLevel; tryLevel++)
+                    {
+                        snprintf(levelPath, sizeof(levelPath), "/MAP/%d", tryLevel);
+                        if (lv_fs_dir_open(&dir, levelPath) == LV_FS_RES_OK)
+                        {
+                            lv_fs_dir_close(&dir);
+                            printf("[MapTileContReload] Found available level %d, using it\n", tryLevel);
+                            Model.mapConv.SetLevel(tryLevel);
+                            mapLevelCurrent = tryLevel;
+                            lv_slider_set_value(View.ui.zoom.slider, tryLevel, LV_ANIM_OFF);
+                            foundLevel = true;
+                        }
+                    }
+                    
+                    if (!foundLevel)
+                    {
+                        printf("[MapTileContReload] FATAL: No map data found on SD card!\n");
+                        return;
+                    }
+                }
+            }
+            else
+            {
+                printf("[MapTileContReload] CRITICAL: Default level directory not found!\n");
+                return;
+            }
         }
     }
     else
@@ -393,7 +442,7 @@ void LiveMap::MapTileContReload()
     }
 
     /* tile src */
-    printf("[MapTileContReload] Loading %u map tiles...\n", View.ui.map.tileNum);
+    printf("[MapTileContReload] Loading %u map tiles at level %d\n", View.ui.map.tileNum, Model.mapConv.GetLevel());
     for (uint32_t i = 0; i < View.ui.map.tileNum; i++)
     {
         TileConv::Point_t pos;
@@ -401,20 +450,36 @@ void LiveMap::MapTileContReload()
 
         char path[64];
         Model.mapConv.ConvertMapPath(pos.x, pos.y, path, sizeof(path));
+        
+        // Debug: Show the actual path generated by ConvertMapPath
+        printf("[MapTileContReload] Generated path for tile %u: %s\n", i, path);
+        #ifdef MAP_FORMAT_BIN
+        printf("[MapTileContReload] Using BIN format (MAP_FORMAT_BIN defined)\n");
+        #else
+        printf("[MapTileContReload] Using PNG format (MAP_FORMAT_BIN not defined)\n");
+        #endif
+        
+        // Calculate tile grid position for better debugging
+        // Assuming a common grid layout (like 3x2 for 6 tiles)
+        int tilesPerRow = (View.ui.map.tileNum <= 4) ? 2 : 3;  // Estimate based on tile count
+        int gridRow = i / tilesPerRow;
+        int gridCol = i % tilesPerRow;
 
         // Quick file existence check
         lv_fs_file_t testFile;
-        if (lv_fs_open(&testFile, path, LV_FS_MODE_RD) == LV_FS_RES_OK)
+        bool tileExists = (lv_fs_open(&testFile, path, LV_FS_MODE_RD) == LV_FS_RES_OK);
+        if (tileExists)
         {
             lv_fs_close(&testFile);
-            printf("[MapTileContReload] ✓ Tile %u: %s\n", i, path);
+            printf("[MapTileContReload] ✓ Tile %u [%d,%d]\n", i, gridRow, gridCol);
+            View.SetMapTileSrc(i, path);
         }
         else
         {
-            printf("[MapTileContReload] ✗ Tile %u: %s (not found)\n", i, path);
+            printf("[MapTileContReload] ✗ Tile %u [%d,%d]: %s (not found)\n", i, gridRow, gridCol, path);
+            // Still try to set the tile source - let the view handle missing files
+            View.SetMapTileSrc(i, path);
         }
-
-        View.SetMapTileSrc(i, path);
     }
 }
 
