@@ -1,0 +1,66 @@
+sequenceDiagram
+    participant Device as ESP32 Device
+    participant WiFi as WiFi Network
+    participant Server as OTA Server
+    participant VersionAPI as Version API
+    participant FirmwareAPI as Firmware API
+
+    Note over Device: 開機啟動
+    Device->>Device: setup() 初始化
+    Device->>WiFi: 連接WiFi網路
+    WiFi-->>Device: 連接成功
+
+    alt ENABLE_AUTO_OTA_CHECK 啟用
+        Device->>Device: 初始化OTA Updater
+        Note over Device: currentVersion = "1.0.0"<br/>serverURL = OTA_SERVER_URL<br/>versionURL = OTA_VERSION_URL<br/>interval = OTA_CHECK_INTERVAL
+        
+        Note over Device: 開機時立即檢查更新
+        Device->>VersionAPI: GET /version
+        VersionAPI-->>Device: {"version": "1.1.0"}
+        
+        Device->>Device: 比較版本<br/>Current: 1.0.0<br/>Remote: 1.1.0
+        
+        alt 發現新版本
+            Note over Device: 有新版本可用
+            Device->>FirmwareAPI: GET /firmware/firmware.bin
+            FirmwareAPI-->>Device: 固件二進制文件流
+            
+            Device->>Device: Update.begin(contentLength)
+            Device->>Device: Update.writeStream(client)
+            
+            alt 更新成功
+                Device->>Device: Update.end()
+                Device->>Device: 重新啟動 ESP.restart()
+                Note over Device: 設備重啟，運行新版本
+            else 更新失敗
+                Device->>Device: 記錄錯誤，繼續運行舊版本
+            end
+        else 版本相同
+            Note over Device: 已是最新版本，無需更新
+        end
+    end
+
+    Note over Device: 進入主循環 loop()
+    
+    loop 每次循環
+        Device->>Device: 執行主要功能<br/>lv_timer_handler()
+        
+        alt 自動檢查時間到 (每3600秒)
+            Device->>Device: otaUpdater.handleAutoCheck()
+            Device->>VersionAPI: GET /version
+            VersionAPI-->>Device: 版本信息
+            
+            alt 發現新版本
+                Device->>FirmwareAPI: GET /firmware/firmware.bin
+                FirmwareAPI-->>Device: 固件文件
+                Device->>Device: 執行OTA更新
+                Device->>Device: 重新啟動
+            else 無新版本
+                Device->>Device: 繼續正常運行
+            end
+        end
+        
+        Device->>Device: delay(10ms)
+    end
+
+    Note over Device,FirmwareAPI: OTA配置參數:<br/>- ENABLE_AUTO_OTA_CHECK: 啟用自動檢查<br/>- OTA_CHECK_INTERVAL: 3600秒檢查間隔<br/>- OTA_SERVER_URL: 固件服務器URL<br/>- OTA_VERSION_URL: 版本檢查URL
