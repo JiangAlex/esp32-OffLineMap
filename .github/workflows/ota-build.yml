@@ -1,0 +1,78 @@
+name: ESP32 OTA Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'  # 當推送版本標籤時觸發
+  workflow_dispatch:  # 允許手動觸發
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.x'
+        
+    - name: Install PlatformIO
+      run: |
+        pip install platformio
+        
+    - name: Build firmware for PNG environment
+      run: |
+        pio run -e esp32-s3-devkitc-1
+        
+    - name: Build firmware for BIN environment
+      run: |
+        pio run -e esp32-s3-devkitc-1-bin
+        
+    - name: Prepare release files
+      run: |
+        mkdir -p release
+        cp .pio/build/esp32-s3-devkitc-1/firmware.bin release/firmware-png.bin
+        cp .pio/build/esp32-s3-devkitc-1-bin/firmware.bin release/firmware-bin.bin
+        
+        # 創建版本信息文件
+        echo '{
+          "version": "'${GITHUB_REF#refs/tags/}'",
+          "build_date": "'$(date -u +%Y-%m-%dT%H:%M:%SZ)'",
+          "commit": "'${GITHUB_SHA}'",
+          "environments": {
+            "png": "firmware-png.bin",
+            "bin": "firmware-bin.bin"
+          }
+        }' > release/version.json
+        
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          release/firmware-png.bin
+          release/firmware-bin.bin
+          release/version.json
+        body: |
+          ## ESP32 離線地圖 OTA 更新
+          
+          ### 版本: ${{ github.ref_name }}
+          
+          #### 固件文件:
+          - `firmware-png.bin` - PNG 格式地圖版本
+          - `firmware-bin.bin` - BIN 格式地圖版本
+          - `version.json` - 版本信息文件
+          
+          #### 如何使用:
+          1. 下載對應的固件文件
+          2. 通過 OTA 系統自動更新或手動上傳
+          
+          #### 更新內容:
+          請參閱 commit 記錄查看詳細更新內容。
+          
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -42,12 +42,26 @@ void setup()
   // 启动提示音
   HAL::Buzz_Tone(1000, 200);  // 1kHz, 200ms
 
-  // WiFi connection setup (你需要根据你的项目调整)
-  // WiFi.begin("your_ssid", "your_password");
-  // while (WiFi.status() != WL_CONNECTED) {
-  //     delay(1000);
-  //     Serial.println("Connecting to WiFi...");
-  // }
+  // WiFi connection setup for OTA (請根據你的網路環境修改)
+  #ifdef ENABLE_AUTO_OTA_CHECK
+  WiFi.begin("your_ssid", "your_password");  // 請修改為你的WiFi SSID和密碼
+  Serial.print("Connecting to WiFi");
+  int wifi_timeout = 0;
+  while (WiFi.status() != WL_CONNECTED && wifi_timeout < 30) {
+      delay(1000);
+      Serial.print(".");
+      wifi_timeout++;
+  }
+  
+  if (WiFi.status() == WL_CONNECTED) {
+      Serial.println();
+      Serial.print("WiFi connected! IP address: ");
+      Serial.println(WiFi.localIP());
+  } else {
+      Serial.println();
+      Serial.println("WiFi connection failed! OTA updates will be disabled.");
+  }
+  #endif
   
   #ifdef ENABLE_AUTO_OTA_CHECK
   // Initialize OTA updater

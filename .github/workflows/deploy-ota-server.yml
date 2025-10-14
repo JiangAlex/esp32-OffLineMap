@@ -1,0 +1,153 @@
+name: Deploy OTA Server
+
+on:
+  workflow_run:
+    workflows: ["ESP32 OTA Build and Release"]
+    types:
+      - completed
+  workflow_dispatch:
+
+jobs:
+  deploy-ota-server:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        
+    - name: Create OTA server
+      run: |
+        mkdir -p ota-server
+        cd ota-server
+        
+        # 創建簡單的 Express.js 服務器
+        cat > package.json << 'EOF'
+        {
+          "name": "esp32-ota-server",
+          "version": "1.0.0",
+          "description": "ESP32 OTA Update Server",
+          "main": "server.js",
+          "scripts": {
+            "start": "node server.js"
+          },
+          "dependencies": {
+            "express": "^4.18.2",
+            "cors": "^2.8.5"
+          }
+        }
+        EOF
+        
+        # 創建服務器代碼
+        cat > server.js << 'EOF'
+        const express = require('express');
+        const cors = require('cors');
+        const path = require('path');
+        const fs = require('fs');
+        
+        const app = express();
+        const PORT = process.env.PORT || 3000;
+        
+        app.use(cors());
+        app.use(express.static('public'));
+        
+        // 版本檢查端點
+        app.get('/version', (req, res) => {
+          try {
+            const versionFile = path.join(__dirname, 'public', 'version.json');
+            if (fs.existsSync(versionFile)) {
+              const version = JSON.parse(fs.readFileSync(versionFile, 'utf8'));
+              res.json(version);
+            } else {
+              res.status(404).json({ error: 'Version file not found' });
+            }
+          } catch (error) {
+            res.status(500).json({ error: 'Internal server error' });
+          }
+        });
+        
+        // 固件下載端點
+        app.get('/firmware/:filename', (req, res) => {
+          const filename = req.params.filename;
+          const filePath = path.join(__dirname, 'public', filename);
+          
+          if (fs.existsSync(filePath)) {
+            res.download(filePath);
+          } else {
+            res.status(404).json({ error: 'Firmware file not found' });
+          }
+        });
+        
+        // 默認固件端點（向後兼容）
+        app.get('/firmware', (req, res) => {
+          const firmwarePath = path.join(__dirname, 'public', 'firmware.bin');
+          if (fs.existsSync(firmwarePath)) {
+            res.download(firmwarePath);
+          } else {
+            res.status(404).json({ error: 'Default firmware not found' });
+          }
+        });
+        
+        app.listen(PORT, () => {
+          console.log(`OTA Server running on port ${PORT}`);
+        });
+        EOF
+        
+        npm install
+        
+    - name: Get latest release
+      id: get_release
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const { data: release } = await github.rest.repos.getLatestRelease({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+          });
+          
+          const assets = release.assets;
+          const downloadUrls = {};
+          
+          for (const asset of assets) {
+            downloadUrls[asset.name] = asset.browser_download_url;
+          }
+          
+          return {
+            version: release.tag_name,
+            assets: downloadUrls
+          };
+          
+    - name: Download firmware files
+      run: |
+        cd ota-server
+        mkdir -p public
+        
+        # 下載固件文件
+        if [[ -n "${{ fromJson(steps.get_release.outputs.result).assets['firmware-png.bin'] }}" ]]; then
+          wget -O public/firmware-png.bin "${{ fromJson(steps.get_release.outputs.result).assets['firmware-png.bin'] }}"
+        fi
+        
+        if [[ -n "${{ fromJson(steps.get_release.outputs.result).assets['firmware-bin.bin'] }}" ]]; then
+          wget -O public/firmware-bin.bin "${{ fromJson(steps.get_release.outputs.result).assets['firmware-bin.bin'] }}"
+        fi
+        
+        if [[ -n "${{ fromJson(steps.get_release.outputs.result).assets['version.json'] }}" ]]; then
+          wget -O public/version.json "${{ fromJson(steps.get_release.outputs.result).assets['version.json'] }}"
+        fi
+        
+        # 創建默認固件鏈接（指向 PNG 版本）
+        if [ -f public/firmware-png.bin ]; then
+          cp public/firmware-png.bin public/firmware.bin
+        fi
+        
+    - name: Deploy to GitHub Pages
+      uses: peaceiris/actions-gh-pages@v3
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        publish_dir: ./ota-server
+        publish_branch: gh-pages
