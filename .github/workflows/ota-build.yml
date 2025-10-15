@@ -45,8 +45,20 @@ jobs:
           "environments": {
             "png": "firmware-png.bin",
             "bin": "firmware-bin.bin"
+          },
+          "download_urls": {
+            "png": "https://github.com/JiangAlex/esp32-OffLineMap/releases/latest/download/firmware-png.bin",
+            "bin": "https://github.com/JiangAlex/esp32-OffLineMap/releases/latest/download/firmware-bin.bin"
           }
         }' > release/version.json
+        
+    - name: Deploy to GitHub Pages
+      uses: peaceiris/actions-gh-pages@v3
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        publish_dir: ./release
+        destination_dir: firmware
+        enable_jekyll: false
         
     - name: Create Release
       uses: softprops/action-gh-release@v1
