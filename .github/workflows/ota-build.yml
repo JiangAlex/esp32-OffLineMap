@@ -79,7 +79,7 @@ jobs:
             </ul>
         </body>
         </html>
-HTML_EOF
+        HTML_EOF
         
     - name: Deploy to GitHub Pages
       uses: peaceiris/actions-gh-pages@v3
