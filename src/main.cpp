@@ -65,7 +65,7 @@ void setup()
   
   #ifdef ENABLE_AUTO_OTA_CHECK
   // Initialize OTA updater
-  String currentVersion = "1.0.0"; // 设置当前版本
+  String currentVersion = "1.0.5"; // 设置当前版本
   
   #ifdef OTA_SERVER_URL
   String serverURL = OTA_SERVER_URL;

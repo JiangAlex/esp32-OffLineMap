@@ -5,7 +5,7 @@
 
 set -e
 
-PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$PROJECT_DIR"
 
 # 顏色輸出
@@ -195,23 +195,26 @@ create_git_release() {
     if ! git diff --quiet; then
         print_warning "有未提交的更改，是否繼續? (y/N)"
         read -r response
-        if [[ ! "$response" =~ ^([yY][eE][sS]|[yY])$ ]]; then
-            print_error "已取消"
-            exit 1
-        fi
+        case "$response" in
+            [yY]|[yY][eE][sS]) ;;
+            *) print_error "已取消"; exit 1 ;;
+        esac
     fi
     
     # 創建標籤
     if git tag -l | grep -q "^$VERSION$"; then
         print_warning "標籤 $VERSION 已存在，是否刪除並重新創建? (y/N)"
         read -r response
-        if [[ "$response" =~ ^([yY][eE][sS]|[yY])$ ]]; then
-            git tag -d "$VERSION"
-            git push origin ":refs/tags/$VERSION" 2>/dev/null || true
-        else
-            print_error "已取消"
-            exit 1
-        fi
+        case "$response" in
+            [yY]|[yY][eE][sS])
+                git tag -d "$VERSION"
+                git push origin ":refs/tags/$VERSION" 2>/dev/null || true
+                ;;
+            *)
+                print_error "已取消"
+                exit 1
+                ;;
+        esac
     fi
     
     git tag -a "$VERSION" -m "ESP32 離線地圖 OTA 測試版本 $VERSION"

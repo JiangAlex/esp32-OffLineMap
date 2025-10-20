@@ -140,8 +140,10 @@ jobs:
           wget -O public/version.json "${{ fromJson(steps.get_release.outputs.result).assets['version.json'] }}"
         fi
         
-        # 創建默認固件鏈接（指向 PNG 版本）
-        if [ -f public/firmware-png.bin ]; then
+        # 創建默認固件鏈接（指向 BIN 版本）
+        if [ -f public/firmware-bin.bin ]; then
+          cp public/firmware-bin.bin public/firmware.bin
+        elif [ -f public/firmware-png.bin ]; then
           cp public/firmware-png.bin public/firmware.bin
         fi
         

@@ -2,7 +2,7 @@
 
 # 版本管理腳本 - 用於更新項目中的版本號
 
-PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$PROJECT_DIR"
 
 # 顏色輸出
@@ -26,9 +26,20 @@ print_error() {
 # 獲取當前版本
 get_current_version() {
     if [ -f "src/App/Version.h" ]; then
-        grep "APP_VERSION" src/App/Version.h | cut -d'"' -f2
+        # 尋找 VERSION_SOFTWARE 定義
+        if grep -q "VERSION_SOFTWARE" src/App/Version.h; then
+            version=$(grep "VERSION_SOFTWARE" src/App/Version.h | cut -d'"' -f2)
+            # 去除 v 前綴（如果有的話）
+            echo "${version#v}"
+        elif grep -q "APP_VERSION" src/App/Version.h; then
+            version=$(grep "APP_VERSION" src/App/Version.h | cut -d'"' -f2)
+            echo "${version#v}"
+        else
+            echo "1.0.0"
+        fi
     elif grep -q "String currentVersion" src/main.cpp; then
-        grep "String currentVersion" src/main.cpp | cut -d'"' -f2
+        version=$(grep "String currentVersion" src/main.cpp | cut -d'"' -f2)
+        echo "${version#v}"
     else
         echo "1.0.0"
     fi
@@ -40,8 +51,14 @@ update_version() {
     
     # 更新 Version.h（如果存在）
     if [ -f "src/App/Version.h" ]; then
-        sed -i "s/#define APP_VERSION \".*\"/#define APP_VERSION \"$new_version\"/" src/App/Version.h
-        print_success "更新 Version.h"
+        # 更新 VERSION_SOFTWARE 或 APP_VERSION
+        if grep -q "VERSION_SOFTWARE" src/App/Version.h; then
+            sed -i "s/#define VERSION_SOFTWARE[[:space:]]*\".*\"/#define VERSION_SOFTWARE        \"v$new_version\"/" src/App/Version.h
+            print_success "更新 Version.h (VERSION_SOFTWARE)"
+        elif grep -q "APP_VERSION" src/App/Version.h; then
+            sed -i "s/#define APP_VERSION[[:space:]]*\".*\"/#define APP_VERSION \"v$new_version\"/" src/App/Version.h
+            print_success "更新 Version.h (APP_VERSION)"
+        fi
     fi
     
     # 更新 main.cpp 中的版本號
@@ -79,10 +96,9 @@ increment_version() {
     local type="$1"
     
     # 解析版本號 (假設格式為 x.y.z)
-    IFS='.' read -ra VERSION_PARTS <<< "$current"
-    local major="${VERSION_PARTS[0]}"
-    local minor="${VERSION_PARTS[1]}"
-    local patch="${VERSION_PARTS[2]}"
+    local major=$(echo "$current" | cut -d'.' -f1)
+    local minor=$(echo "$current" | cut -d'.' -f2)
+    local patch=$(echo "$current" | cut -d'.' -f3)
     
     case "$type" in
         "major")
@@ -113,7 +129,8 @@ increment_version() {
 # 驗證版本格式
 validate_version() {
     local version="$1"
-    if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    # 使用 grep 來驗證版本格式 (x.y.z)
+    if ! echo "$version" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
         print_error "無效的版本格式: $version"
         echo "版本號格式應為: x.y.z (例如: 1.2.3)"
         exit 1

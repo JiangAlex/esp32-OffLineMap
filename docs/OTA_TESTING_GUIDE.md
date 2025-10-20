@@ -4,6 +4,29 @@
 
 本文檔描述如何使用 GitHub 來測試 ESP32 離線地圖項目的 OTA (Over-The-Air) 更新功能。
 
+## 當前 OTA 配置
+
+### 服務器 URL 配置
+項目當前配置的 OTA 服務器位於 GitHub Pages：
+
+| 類型 | URL |
+|------|-----|
+| 版本檢查 | `https://jiangalex.github.io/esp32-OffLineMap/firmware/latest_version.txt` |
+| PNG 固件 | `https://jiangalex.github.io/esp32-OffLineMap/firmware/firmware-png.bin` |
+| BIN 固件 | `https://jiangalex.github.io/esp32-OffLineMap/firmware/firmware-bin.bin` |
+| 版本信息 | `https://jiangalex.github.io/esp32-OffLineMap/firmware/version.json` |
+| 固件列表 | `https://jiangalex.github.io/esp32-OffLineMap/firmware/` |
+
+### 構建環境
+- **esp32-s3-devkitc-1**: 生成 PNG 格式地圖版本 (`firmware-png.bin`)
+- **esp32-s3-devkitc-1-bin**: 生成 BIN 格式地圖版本 (`firmware-bin.bin`)
+
+### 自動化流程
+1. 推送版本標籤 (`v*.*.*`) 觸發 GitHub Actions
+2. 自動構建兩個環境的固件
+3. 創建 GitHub Release 
+4. 部署文件到 GitHub Pages (`gh-pages` 分支)
+
 ## 系統架構
 
 ```mermaid
@@ -63,10 +86,23 @@ graph TB
 
 ### 步驟 2: 修改版本號
 
-編輯 `src/main.cpp` 中的版本號：
-```cpp
-String currentVersion = "1.0.1"; // 更新這裡的版本號
+使用版本管理腳本：
+```bash
+# 查看當前版本
+./version.sh current
+
+# 設置特定版本
+./version.sh set 1.0.6
+
+# 自動增加版本號
+./version.sh increment patch   # 1.0.5 -> 1.0.6
+./version.sh increment minor   # 1.0.6 -> 1.1.0  
+./version.sh increment major   # 1.1.0 -> 2.0.0
 ```
+
+版本腳本會自動更新：
+- `src/App/Version.h` 中的 `VERSION_SOFTWARE`
+- `src/main.cpp` 中的 `currentVersion`
 
 ### 步驟 3: 構建固件
 
@@ -83,19 +119,41 @@ String currentVersion = "1.0.1"; // 更新這裡的版本號
 
 推送標籤觸發自動構建：
 ```bash
-# 創建並推送標籤
-./test_ota.sh tag v1.0.1
+# 使用測試腳本（推薦）
+current_version=$(./version.sh current)
+./test_ota.sh tag "v$current_version"
 
 # 或者使用 git 命令
-git tag -a v1.0.1 -m "Release version 1.0.1"
-git push origin v1.0.1
+git tag -a "v$current_version" -m "Release version $current_version"
+git push origin "v$current_version"
 ```
 
 ### 步驟 5: 驗證 OTA 服務器
 
 檢查以下 URL 是否可訪問：
-- 版本檢查: `https://jiangalex.github.io/esp32-OffLineMap/version`
-- 固件下載: `https://jiangalex.github.io/esp32-OffLineMap/firmware/firmware-png.bin`
+- **版本檢查**: `https://jiangalex.github.io/esp32-OffLineMap/firmware/latest_version.txt`
+- **固件下載 (PNG)**: `https://jiangalex.github.io/esp32-OffLineMap/firmware/firmware-png.bin`
+- **固件下載 (BIN)**: `https://jiangalex.github.io/esp32-OffLineMap/firmware/firmware-bin.bin`
+- **版本信息**: `https://jiangalex.github.io/esp32-OffLineMap/firmware/version.json`
+- **固件列表頁面**: `https://jiangalex.github.io/esp32-OffLineMap/firmware/`
+
+### GitHub Actions 工作流程
+
+當推送版本標籤時，GitHub Actions 會自動執行：
+
+1. **構建階段**：
+   - 構建 `esp32-s3-devkitc-1` 環境（PNG 地圖格式）
+   - 構建 `esp32-s3-devkitc-1-bin` 環境（BIN 地圖格式）
+
+2. **發布階段**：
+   - 創建 `firmware-png.bin` 和 `firmware-bin.bin`
+   - 生成 `version.json` 版本信息文件
+   - 生成 `latest_version.txt` 簡化版本文件
+   - 創建 `index.html` 固件列表頁面
+
+3. **部署階段**：
+   - 部署文件到 GitHub Pages (`gh-pages` 分支)
+   - 創建 GitHub Release 並附加固件文件
 
 ### 步驟 6: 測試 OTA 更新
 
@@ -118,13 +176,15 @@ pio device monitor
 4. **觀察 OTA 日誌**：
    設備應該顯示類似以下的日誌：
 ```
-OTA Updater initialized - Current version: 1.0.0
+OTA Updater initialized - Current version: 1.0.5
 Performing initial OTA check on boot...
-Remote version response: {"version":"1.0.1"}
-Current: 1.0.0, Remote: 1.0.1
+Checking for updates from: https://jiangalex.github.io/esp32-OffLineMap/firmware/latest_version.txt
+Remote version: 1.0.6
+Current: 1.0.5, Remote: 1.0.6
 New version available!
+Downloading firmware from: https://jiangalex.github.io/esp32-OffLineMap/firmware/firmware-png.bin
 Starting OTA update. Firmware size: 1234567 bytes
-...
+Download progress: 25%...50%...75%...100%
 OTA update completed successfully!
 Rebooting device in 3 seconds...
 ```
@@ -141,8 +201,13 @@ Rebooting device in 3 seconds...
 2. **修改測試 URL**：
    暫時修改 `platformio.ini` 中的 URL：
 ```ini
--D OTA_SERVER_URL=\"http://192.168.1.100:8000/firmware-png.bin\"
--D OTA_VERSION_URL=\"http://192.168.1.100:8000/version.json\"
+-D OTA_SERVER_URL=\"http://192.168.1.100:8000/firmware\"
+-D OTA_VERSION_URL=\"http://192.168.1.100:8000/latest_version.txt\"
+```
+
+3. **構建並上傳測試版本**：
+```bash
+pio run -e esp32-s3-devkitc-1 -t upload
 ```
 
 3. **重新編譯和上傳**：
@@ -183,10 +248,19 @@ pio run -e esp32-s3-devkitc-1 -t upload
 2. **手動測試 API**：
 ```bash
 # 測試版本檢查
-curl -v https://jiangalex.github.io/esp32-OffLineMap/version
+curl -v https://jiangalex.github.io/esp32-OffLineMap/firmware/latest_version.txt
 
-# 測試固件下載
+# 測試版本信息 JSON
+curl -v https://jiangalex.github.io/esp32-OffLineMap/firmware/version.json
+
+# 測試固件下載 (PNG)
 curl -I https://jiangalex.github.io/esp32-OffLineMap/firmware/firmware-png.bin
+
+# 測試固件下載 (BIN)
+curl -I https://jiangalex.github.io/esp32-OffLineMap/firmware/firmware-bin.bin
+
+# 查看固件列表頁面
+curl https://jiangalex.github.io/esp32-OffLineMap/firmware/
 ```
 
 3. **監控網絡流量**：
