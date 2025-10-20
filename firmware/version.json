@@ -1,12 +1,16 @@
 {
-  "version": "v1.0.5",
-  "build_date": "2025-10-15T09:39:36Z",
-  "commit": "c8c81a9302af61449176d6533a9ad417961a9f0a",
+  "version": "v1.0.6",
+  "build_date": "2025-10-20T10:04:27Z",
+  "commit": "87205d5ca700fd5bde69459c6e775b0994cba813",
   "environments": {
     "png": "firmware-png.bin",
     "bin": "firmware-bin.bin"
   },
   "download_urls": {
+    "png": "https://jiangalex.github.io/esp32-OffLineMap/firmware/firmware-png.bin",
+    "bin": "https://jiangalex.github.io/esp32-OffLineMap/firmware/firmware-bin.bin"
+  },
+  "github_releases": {
     "png": "https://github.com/JiangAlex/esp32-OffLineMap/releases/latest/download/firmware-png.bin",
     "bin": "https://github.com/JiangAlex/esp32-OffLineMap/releases/latest/download/firmware-bin.bin"
   }
