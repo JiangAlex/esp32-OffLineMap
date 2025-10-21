@@ -39,10 +39,10 @@ pio device monitor
 ./version.sh increment patch
 
 # 構建並創建發布
-./test_ota.sh release $(./version.sh current)
+./test_ota.sh release $(./version.sh get)
 
 # 推送標籤到 GitHub 觸發自動構建
-./test_ota.sh tag v$(./version.sh current)
+./test_ota.sh tag v$(./version.sh get)
 ```
 
 ### 5. 監控 OTA 更新過程
@@ -89,8 +89,8 @@ Rebooting device in 3 seconds...
 ### 觸發自動構建：
 ```bash
 ./version.sh increment patch    # 增加版本號
-git add -A && git commit -m "Release v$(./version.sh current)"
-git tag "v$(./version.sh current)"
+git add -A && git commit -m "Release v$(./version.sh get)"
+git tag "v$(./version.sh get)"
 git push origin master --tags
 ```
 

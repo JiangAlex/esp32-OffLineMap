@@ -88,8 +88,11 @@ graph TB
 
 使用版本管理腳本：
 ```bash
-# 查看當前版本
+# 查看當前版本（帶標籤）
 ./version.sh current
+
+# 獲取純版本號（用於腳本）
+./version.sh get
 
 # 設置特定版本
 ./version.sh set 1.0.6
@@ -120,7 +123,7 @@ graph TB
 推送標籤觸發自動構建：
 ```bash
 # 使用測試腳本（推薦）
-current_version=$(./version.sh current)
+current_version=$(./version.sh get)
 ./test_ota.sh tag "v$current_version"
 
 # 或者使用 git 命令

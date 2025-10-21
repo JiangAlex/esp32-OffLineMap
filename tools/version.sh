@@ -143,11 +143,13 @@ show_usage() {
     echo ""
     echo "使用方法:"
     echo "  $0 current                    - 顯示當前版本"
+    echo "  $0 get                        - 只輸出版本號（不帶標籤）"
     echo "  $0 set <version>              - 設置特定版本號"
     echo "  $0 increment <major|minor|patch> - 增加版本號"
     echo ""
     echo "範例:"
     echo "  $0 current"
+    echo "  $0 get"
     echo "  $0 set 1.2.3"
     echo "  $0 increment patch"
     echo "  $0 increment minor"
@@ -159,6 +161,9 @@ main() {
     case "${1:-}" in
         "current")
             show_current_version
+            ;;
+        "get")
+            get_current_version
             ;;
         "set")
             if [ -z "${2:-}" ]; then
