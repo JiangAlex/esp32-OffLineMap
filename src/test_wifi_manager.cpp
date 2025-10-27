@@ -1,3 +1,5 @@
+#ifdef WIFI_MANAGER_TEST
+
 #include <Arduino.h>
 #include "App/Utils/WiFiManager/wifi_manager.h"
 
@@ -61,3 +63,5 @@ void loop() {
     
     delay(100);
 }
+
+#endif // WIFI_MANAGER_TEST

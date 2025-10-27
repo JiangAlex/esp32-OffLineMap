@@ -48,25 +48,16 @@ String OTAUpdater::getRemoteVersion() {
         payload = http.getString();
         Serial.printf("Remote version response: %s\n", payload.c_str());
         
-        // Try to parse as JSON first
+        // Parse JSON response
         DynamicJsonDocument doc(1024);
         DeserializationError error = deserializeJson(doc, payload);
         
-        if (!error && doc.containsKey("version")) {
-            // JSON format with version field
+        if (!error) {
             String version = doc["version"].as<String>();
             http.end();
             return version;
         } else {
-            // Assume plain text format, trim whitespace
-            payload.trim();
-            if (payload.length() > 0) {
-                Serial.printf("Parsed version from plain text: %s\n", payload.c_str());
-                http.end();
-                return payload;
-            } else {
-                Serial.println("Failed to parse version - empty response");
-            }
+            Serial.println("Failed to parse version JSON");
         }
     } else {
         Serial.printf("HTTP GET failed, error: %d\n", httpCode);
@@ -161,8 +152,11 @@ bool OTAUpdater::performUpdate() {
         return false;
     }
     
-    // Use serverURL directly as it should contain the full firmware URL
     String firmwareURL = serverURL;
+    if (!firmwareURL.endsWith("/")) {
+        firmwareURL += "/";
+    }
+    firmwareURL += "firmware.bin";
     
     Serial.printf("Downloading firmware from: %s\n", firmwareURL.c_str());
     
