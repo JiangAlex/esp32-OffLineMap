@@ -46,18 +46,32 @@ String OTAUpdater::getRemoteVersion() {
     
     if (httpCode == HTTP_CODE_OK) {
         payload = http.getString();
+        payload.trim(); // Remove any whitespace
         Serial.printf("Remote version response: %s\n", payload.c_str());
         
-        // Parse JSON response
-        DynamicJsonDocument doc(1024);
-        DeserializationError error = deserializeJson(doc, payload);
-        
-        if (!error) {
-            String version = doc["version"].as<String>();
+        // Check if response is JSON format
+        if (payload.startsWith("{")) {
+            // Parse JSON response
+            DynamicJsonDocument doc(1024);
+            DeserializationError error = deserializeJson(doc, payload);
+            
+            if (!error) {
+                String version = doc["version"].as<String>();
+                http.end();
+                return version;
+            } else {
+                Serial.println("Failed to parse version JSON");
+            }
+        } else {
+            // Assume plain text version format
+            String version = payload;
+            // Remove 'v' prefix if present
+            if (version.startsWith("v") || version.startsWith("V")) {
+                version = version.substring(1);
+            }
+            Serial.printf("Parsed plain text version: %s\n", version.c_str());
             http.end();
             return version;
-        } else {
-            Serial.println("Failed to parse version JSON");
         }
     } else {
         Serial.printf("HTTP GET failed, error: %d\n", httpCode);
@@ -77,14 +91,69 @@ bool OTAUpdater::checkForUpdates() {
     
     Serial.printf("Current: %s, Remote: %s\n", currentVersion.c_str(), remoteVersion.c_str());
     
-    // Simple version comparison
-    if (remoteVersion != currentVersion) {
+    // Improved version comparison
+    int comparison = compareVersions(currentVersion, remoteVersion);
+    if (comparison < 0) {
         Serial.println("New version available!");
         return true;
+    } else if (comparison > 0) {
+        Serial.println("Current version is newer than remote");
+        return false;
+    } else {
+        Serial.println("Already up to date");
+        return false;
+    }
+}
+
+int OTAUpdater::compareVersions(const String& version1, const String& version2) {
+    // Normalize versions by removing 'v' prefix
+    String v1 = version1;
+    String v2 = version2;
+    
+    if (v1.startsWith("v") || v1.startsWith("V")) {
+        v1 = v1.substring(1);
+    }
+    if (v2.startsWith("v") || v2.startsWith("V")) {
+        v2 = v2.substring(1);
     }
     
-    Serial.println("Already up to date");
-    return false;
+    // Split versions into components
+    int v1Parts[3] = {0, 0, 0};
+    int v2Parts[3] = {0, 0, 0};
+    
+    // Parse version1
+    int partIndex = 0;
+    int lastDot = 0;
+    for (int i = 0; i <= v1.length() && partIndex < 3; i++) {
+        if (i == v1.length() || v1.charAt(i) == '.') {
+            if (i > lastDot) {
+                v1Parts[partIndex] = v1.substring(lastDot, i).toInt();
+            }
+            lastDot = i + 1;
+            partIndex++;
+        }
+    }
+    
+    // Parse version2
+    partIndex = 0;
+    lastDot = 0;
+    for (int i = 0; i <= v2.length() && partIndex < 3; i++) {
+        if (i == v2.length() || v2.charAt(i) == '.') {
+            if (i > lastDot) {
+                v2Parts[partIndex] = v2.substring(lastDot, i).toInt();
+            }
+            lastDot = i + 1;
+            partIndex++;
+        }
+    }
+    
+    // Compare parts
+    for (int i = 0; i < 3; i++) {
+        if (v1Parts[i] < v2Parts[i]) return -1;
+        if (v1Parts[i] > v2Parts[i]) return 1;
+    }
+    
+    return 0; // Versions are equal
 }
 
 bool OTAUpdater::downloadAndInstallFirmware(const String& firmwareURL) {
@@ -152,11 +221,8 @@ bool OTAUpdater::performUpdate() {
         return false;
     }
     
+    // Use the serverURL directly as it should contain the complete firmware URL
     String firmwareURL = serverURL;
-    if (!firmwareURL.endsWith("/")) {
-        firmwareURL += "/";
-    }
-    firmwareURL += "firmware.bin";
     
     Serial.printf("Downloading firmware from: %s\n", firmwareURL.c_str());
     

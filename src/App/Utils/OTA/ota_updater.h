@@ -20,6 +20,7 @@ private:
     String getRemoteVersion();
     bool downloadAndInstallFirmware(const String& firmwareURL);
     void rebootDevice();
+    int compareVersions(const String& version1, const String& version2);
 
 public:
     OTAUpdater();

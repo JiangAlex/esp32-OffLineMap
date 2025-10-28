@@ -56,12 +56,12 @@ void WiFiManager::loop() {
         
         // 檢查入口超時
         if (millis() - portalStartTime > WIFI_MANAGER_PORTAL_TIMEOUT) {
-            Serial.println("WiFiManager: Portal timeout, retrying auto-connect");
+            Serial.println("WiFiManager: Portal timeout, restarting config portal");
             stopConfigPortal();
             
-            if (config.valid) {
-                autoConnectToWiFi();
-            }
+            // 重新啟動配置門戶而不是退出
+            delay(1000);
+            startConfigPortal();
         }
     }
     
@@ -183,17 +183,28 @@ void WiFiManager::setupDNS() {
 }
 
 void WiFiManager::handleRoot() {
+    Serial.println("WiFiManager: Serving root page");
     server->send(200, "text/html", getConfigPage());
 }
 
 void WiFiManager::handleWiFiScan() {
-    server->send(200, "application/json", scanNetworks());
+    Serial.println("WiFiManager: Handling WiFi scan request");
+    String result = scanNetworks();
+    Serial.printf("WiFiManager: Scan result length: %d\n", result.length());
+    server->send(200, "application/json", result);
 }
 
 void WiFiManager::handleWiFiSave() {
+    Serial.println("WiFiManager: Handling WiFi save request");
+    Serial.printf("WiFiManager: Has ssid arg: %s\n", server->hasArg("ssid") ? "true" : "false");
+    Serial.printf("WiFiManager: Has password arg: %s\n", server->hasArg("password") ? "true" : "false");
+    
     if (server->hasArg("ssid") && server->hasArg("password")) {
         String ssid = server->arg("ssid");
         String password = server->arg("password");
+        
+        Serial.printf("WiFiManager: Saving SSID: %s\n", ssid.c_str());
+        Serial.printf("WiFiManager: Password length: %d\n", password.length());
         
         // 保存配置
         strncpy(config.ssid, ssid.c_str(), sizeof(config.ssid) - 1);
@@ -209,6 +220,7 @@ void WiFiManager::handleWiFiSave() {
         stopConfigPortal();
         autoConnectToWiFi();
     } else {
+        Serial.println("WiFiManager: Missing SSID or password parameters");
         server->send(400, "text/html", "<h1>Missing parameters</h1>");
     }
 }
@@ -225,6 +237,18 @@ void WiFiManager::handleReset() {
 }
 
 void WiFiManager::handleNotFound() {
+    String uri = server->uri();
+    String method = (server->method() == HTTP_GET) ? "GET" : "POST";
+    Serial.printf("WiFiManager: 404 - %s %s\n", method.c_str(), uri.c_str());
+    Serial.printf("WiFiManager: Available routes: /, /scan, /save, /info, /reset\n");
+    
+    // Debug: print all arguments
+    for (int i = 0; i < server->args(); i++) {
+        Serial.printf("WiFiManager: Arg %d: %s = %s\n", i, 
+                     server->argName(i).c_str(), 
+                     server->arg(i).c_str());
+    }
+    
     server->sendHeader("Location", "/", true);
     server->send(302, "text/plain", "");
 }

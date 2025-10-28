@@ -3,14 +3,21 @@
 
 #ifdef ENABLE_AUTO_OTA_CHECK
 #include "App/Utils/OTA/ota_updater.h"
+extern OTAUpdater otaUpdater;  // 外部聲明
 #endif
 
 #include "lvgl.h"
 #include "ChappieCore/ChappieCore.h"
 #include "App/App.h"
 #include "App/Common/HAL/HAL.h"
+#include "App/Version.h"
+#include "App/Utils/WiFiManager/wifi_manager.h"
 
 ChappieCore Chappie;
+
+#ifdef ENABLE_AUTO_OTA_CHECK
+WiFiManager wifiManager;  // 全局聲明
+#endif
 
 void setup()
 {
@@ -42,30 +49,41 @@ void setup()
   // 启动提示音
   HAL::Buzz_Tone(1000, 200);  // 1kHz, 200ms
 
-  // WiFi connection setup for OTA (請根據你的網路環境修改)
+  // WiFi connection setup for OTA using WiFi Manager
   #ifdef ENABLE_AUTO_OTA_CHECK
-  WiFi.begin("your_ssid", "your_password");  // 請修改為你的WiFi SSID和密碼
-  Serial.print("Connecting to WiFi");
-  int wifi_timeout = 0;
-  while (WiFi.status() != WL_CONNECTED && wifi_timeout < 30) {
-      delay(1000);
-      Serial.print(".");
-      wifi_timeout++;
-  }
+  Serial.println("===== WIFI MANAGER DEBUG =====");
+  Serial.println("Starting WiFi connection...");
   
-  if (WiFi.status() == WL_CONNECTED) {
-      Serial.println();
-      Serial.print("WiFi connected! IP address: ");
+  // 初始化 WiFi Manager 和 EEPROM
+  wifiManager.begin();
+  
+  // 嘗試自動連接到保存的網路
+  bool connected = wifiManager.autoConnectToWiFi();
+  Serial.printf("autoConnectToWiFi() returned: %s\n", connected ? "true" : "false");
+  
+  if (connected) {
+      Serial.println("Connected to saved WiFi network!");
+      Serial.print("IP address: ");
       Serial.println(WiFi.localIP());
   } else {
-      Serial.println();
-      Serial.println("WiFi connection failed! OTA updates will be disabled.");
+      Serial.println("Failed to connect to saved network.");
+      Serial.println("Starting WiFi configuration portal...");
+      Serial.printf("Connect to AP: %s\n", WIFI_MANAGER_AP_SSID);
+      Serial.printf("Password: %s\n", WIFI_MANAGER_AP_PASSWORD);
+      
+      // 啟動 WiFi Manager 配置門戶
+      Serial.println("Calling startConfigPortal()...");
+      wifiManager.startConfigPortal();
+      Serial.println("startConfigPortal() called");
+      Serial.println("WiFi Manager will handle timeout and restart automatically.");
+      Serial.println("Configuration portal will stay active until WiFi is configured.");
   }
+  Serial.println("===== WIFI MANAGER DEBUG END =====");
   #endif
   
   #ifdef ENABLE_AUTO_OTA_CHECK
   // Initialize OTA updater
-  String currentVersion = "1.0.6"; // 设置当前版本
+  String currentVersion = String(VERSION_SOFTWARE).substring(1); // 移除 'v' 前綴：v1.0.5 -> 1.0.5
   
   #ifdef OTA_SERVER_URL
   String serverURL = OTA_SERVER_URL;
@@ -111,6 +129,9 @@ void loop()
   delay(10);
   
   #ifdef ENABLE_AUTO_OTA_CHECK
+  // Handle WiFi Manager
+  wifiManager.loop();
+  
   // Handle automatic OTA checks
   otaUpdater.handleAutoCheck();
   #endif

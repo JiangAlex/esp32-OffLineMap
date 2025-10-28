@@ -11,7 +11,7 @@
 #define WIFI_MANAGER_AP_SSID "ESP32-OffLineMap-Setup"
 #define WIFI_MANAGER_AP_PASSWORD "12345678"
 #define WIFI_MANAGER_TIMEOUT 300000  // 5 minutes timeout
-#define WIFI_MANAGER_PORTAL_TIMEOUT 180000  // 3 minutes portal timeout
+#define WIFI_MANAGER_PORTAL_TIMEOUT 600000  // 10 minutes portal timeout
 
 // EEPROM 地址配置
 #define EEPROM_SIZE 512

@@ -301,7 +301,7 @@ String WiFiManager::getConfigPage() {
             submitBtn.innerHTML = "Connecting...";
             submitBtn.disabled = true;
             
-            fetch("/connect", {
+            fetch("/save", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/x-www-form-urlencoded"
@@ -310,10 +310,13 @@ String WiFiManager::getConfigPage() {
             })
             .then(function(response) {
                 if (response.ok) {
-                    window.location.href = "/success";
+                    return response.text();
                 } else {
                     throw new Error("Connection failed");
                 }
+            })
+            .then(function(html) {
+                document.body.innerHTML = html;
             })
             .catch(function(error) {
                 alert("Connection failed, please check network name and password");

@@ -21,7 +21,7 @@ void ChappieCore::begin(uint32_t delayTime)
     /* print Logo */
     printLOGO();
     _LOG("[ChappieCore] Hi!\r\n");
-    _LOG("[ChappieCore] version: %s\r\n", VERSION_SOFTWARE);
+    _LOG("[ChappieCore] Current version: v1.0.1\r\n");
     _LOG("[ChappieCore] author: Forairaaaaa\r\n");
     _LOG("[ChappieCore] https://github.com/Forairaaaaa/Chappie-Core\r\n");
     printf("printLOGO End \r\n");
@@ -68,8 +68,8 @@ void ChappieCore::init()
     Lcd.printf(" 请把设备放在平稳的地方进行初始化!\n");
 
     /* Init I2C */
-    //Wire.begin(5, 4);
-    //Wire.setClock(400000);
+    Wire.begin(5, 4);
+    Wire.setClock(400000);
 
     /* Init IMU */
     //Imu.init();
