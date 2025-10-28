@@ -21,7 +21,7 @@ void ChappieCore::begin(uint32_t delayTime)
     /* print Logo */
     printLOGO();
     _LOG("[ChappieCore] Hi!\r\n");
-    _LOG("[ChappieCore] Current version: v1.0.1\r\n");
+    _LOG("[ChappieCore] Current version: v1.0.7\r\n");
     _LOG("[ChappieCore] author: Forairaaaaa\r\n");
     _LOG("[ChappieCore] https://github.com/Forairaaaaa/Chappie-Core\r\n");
     printf("printLOGO End \r\n");
