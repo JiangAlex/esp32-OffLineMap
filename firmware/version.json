@@ -1,7 +1,7 @@
 {
-  "version": "v1.0.6",
-  "build_date": "2025-10-20T10:04:27Z",
-  "commit": "87205d5ca700fd5bde69459c6e775b0994cba813",
+  "version": "v1.0.7",
+  "build_date": "2025-10-28T09:33:52Z",
+  "commit": "173a8c0e1db9b2fa309103f3c89f8bc9d674d28d",
   "environments": {
     "png": "firmware-png.bin",
     "bin": "firmware-bin.bin"
